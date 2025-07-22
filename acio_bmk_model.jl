@@ -11,7 +11,11 @@ julia -project="."
 
 # import packages
 import XLSX
+<<<<<<< HEAD
 using DataFrames
+=======
+#using DataFrames
+>>>>>>> dev_july19
 
 # read detailed 2017 use table to a data frame
 useTable = XLSX.readdata("IOUse_Before_Redefinitions_PRO_2017_Detail.xlsx", 
@@ -28,12 +32,36 @@ vaDesc = useTable[404:406,1:2]
 useTable = useTable[1:end, 1:end .≠2]
 
 # final demand table
+<<<<<<< HEAD
 fdTable = useTable[1:403, 1:end .∉[2:404]]
 
 # value added table
 vaTable = useTable[404:406, 1:end]
+=======
+fdTable = useTable[1:403, 1:end .∉[2:403]]
+
+# value added table
+vaTable = useTable[1:end .∉[2:403], 1:403]
+>>>>>>> dev_july19
 
 # use table
 useTable = useTable[1:403, 1:403]
 
+<<<<<<< HEAD
+=======
+# read detailed 2017 use table to a data frame
+makeTable = XLSX.readdata("IOMake_Before_Redefinitions_2017_Detail.xlsx", 
+                          "2017",
+                          "A6:OO414")
+
+# reading too many rows. drop missing rows and row and column totals.
+makeTable = makeTable[1:403, 1:404]
+
+# industry descriptions
+indDesc = makeTable[1:end, 1:2]
+
+# drop description column
+makeTable = makeTable[1:end, 1:end .∉2]
+
+>>>>>>> dev_july19
 
