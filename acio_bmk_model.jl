@@ -50,4 +50,3 @@ indDesc = makeTable[1:end, 1:2]
 # drop description column
 makeTable = makeTable[1:end, 1:end .∉2]
 
-
