@@ -1,24 +1,18 @@
 #=
 This code reads and processes data for constructing an ACIO model.
 Data are from the BEA benchmark detail I-O tables.
+Then the model is constructed.
 =#
 
 # set working directory
 cd("/home/chandler/julia-ACIO-model/")
 julia -project="."
 
-#use_table_path = "/home/chandler/julia-ACIO-model/"
-
 # import packages
 import XLSX
-<<<<<<< HEAD
-using DataFrames
-=======
-#using DataFrames
->>>>>>> dev_july19
 
 # read detailed 2017 use table to a data frame
-useTable = XLSX.readdata("IOUse_Before_Redefinitions_PRO_2017_Detail.xlsx", 
+useTable = XLSX.readdata("data/IOUse_Before_Redefinitions_PRO_2017_Detail.xlsx", 
                          "2017",
                          "A6:PK414")
 
@@ -32,25 +26,16 @@ vaDesc = useTable[404:406,1:2]
 useTable = useTable[1:end, 1:end .≠2]
 
 # final demand table
-<<<<<<< HEAD
-fdTable = useTable[1:403, 1:end .∉[2:404]]
-
-# value added table
-vaTable = useTable[404:406, 1:end]
-=======
 fdTable = useTable[1:403, 1:end .∉[2:403]]
 
 # value added table
 vaTable = useTable[1:end .∉[2:403], 1:403]
->>>>>>> dev_july19
 
 # use table
 useTable = useTable[1:403, 1:403]
 
-<<<<<<< HEAD
-=======
 # read detailed 2017 use table to a data frame
-makeTable = XLSX.readdata("IOMake_Before_Redefinitions_2017_Detail.xlsx", 
+makeTable = XLSX.readdata("data/IOMake_Before_Redefinitions_2017_Detail.xlsx", 
                           "2017",
                           "A6:OO414")
 
@@ -63,5 +48,19 @@ indDesc = makeTable[1:end, 1:2]
 # drop description column
 makeTable = makeTable[1:end, 1:end .∉2]
 
->>>>>>> dev_july19
+#=
+form the submatrices and assemble the data
+=#
 
+# A-by-A and C-by-C portions have all 0 entries
+abya = zeros(size(makeTable[2:end,:])[1], size(makeTable[:,2:end])[2])
+abya = hcat(makeTable[2:end,1], abya)
+abya = vcat(reshape(useTable[1,:], (1, 403)), abya)
+cbyc = zeros(size(useTable[2:end,:])[1], size(useTable[:,2:end])[2])
+cbyc = hcat(useTable[2:end,1], cbyc)
+cbyc = vcat(reshape(makeTable[1,:], (1,403)), cbyc)
+
+# transactions matrix
+T_left = vcat(abya, useTable[2:end,:])
+T_right = vcat(makeTable[:,2:end], cbyc[2:end,2:end])
+T_ = hcat(T_left, T_right)
