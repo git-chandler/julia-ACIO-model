@@ -1,8 +1,3 @@
-#=
-This code reads and processes data for constructing an ACIO model.
-Data are from the BEA benchmark detail I-O tables.
-Then the model is constructed.
-=#
 
 # set working directory
 cd("/home/chandler/julia-ACIO-model/")
@@ -64,3 +59,22 @@ cbyc = vcat(reshape(makeTable[1,:], (1,403)), cbyc)
 T_left = vcat(abya, useTable[2:end,:])
 T_right = vcat(makeTable[:,2:end], cbyc[2:end,2:end])
 T_ = hcat(T_left, T_right)
+
+# leakage matrix
+imports = -1*fdTable[2:end,9]
+L_va = hcat(vaTable[2:end, 2:end], zeros(3, 402))
+L04 = hcat(zeros(1,402), reshape(imports, (1,402)))
+L_ = vcat(L_va, L04)
+L_ = hcat(["L01", "L02", "L03", "L04"], L_)
+
+# injection matrix
+abyx = zeros(402,size(fdTable[:,1:end .∉9])[2])
+lbyx = zeros(4,size(fdTable[:,1:end .∉9])[2])
+X_ = vcat(reshape(fdTable[1,1:end .∉9], (1,20)), abyx, fdTable[2:end,1:end .∉9], lbyx)
+
+# assemble the whole matrix
+acio = vcat(T_, L_)
+acio = hcat(acio, X_)
+
+# balance tests
+row_s = sum(skipmissing(acio[2:806,2:end]), dims = 1)
