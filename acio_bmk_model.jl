@@ -5,6 +5,7 @@ julia -project="."
 
 # import packages
 import XLSX
+using Statistics
 
 # read detailed 2017 use table to a data frame
 useTable = XLSX.readdata("data/IOUse_Before_Redefinitions_PRO_2017_Detail.xlsx", 
@@ -20,8 +21,10 @@ comDesc = useTable[1:403, 1:2]
 vaDesc = useTable[404:406,1:2]
 useTable = useTable[1:end, 1:end .≠2]
 
-# final demand table
+# imports and final demand table
 fdTable = useTable[1:403, 1:end .∉[2:403]]
+imports = fdTable[:,9]
+fdTable = fdTable[:, 1:end .∉9]
 
 # value added table
 vaTable = useTable[1:end .∉[2:403], 1:403]
@@ -61,20 +64,21 @@ T_right = vcat(makeTable[:,2:end], cbyc[2:end,2:end])
 T_ = hcat(T_left, T_right)
 
 # leakage matrix
-imports = -1*fdTable[2:end,9]
 L_va = hcat(vaTable[2:end, 2:end], zeros(3, 402))
-L04 = hcat(zeros(1,402), reshape(imports, (1,402)))
+L04 = hcat(zeros(1,402), reshape(imports[2:end,:], (1,402)))
 L_ = vcat(L_va, L04)
 L_ = hcat(["L01", "L02", "L03", "L04"], L_)
 
 # injection matrix
-abyx = zeros(402,size(fdTable[:,1:end .∉9])[2])
-lbyx = zeros(4,size(fdTable[:,1:end .∉9])[2])
-X_ = vcat(reshape(fdTable[1,1:end .∉9], (1,20)), abyx, fdTable[2:end,1:end .∉9], lbyx)
+abyx = zeros(402,19)
+lbyx = zeros(4,19)
+X_ = vcat(reshape(fdTable[1,2:end], (1,19)), abyx, fdTable[2:end,2:end], lbyx)
 
 # assemble the whole matrix
 acio = vcat(T_, L_)
 acio = hcat(acio, X_)
 
 # balance tests
-row_s = sum(skipmissing(acio[2:806,2:end]), dims = 1)
+row_s = sum.(skipmissing.(eachrow(acio[2:806,2:end])))
+col_s = sum.(skipmissing.(eachcol(acio[2:end,2:806])))
+bal = [row_s, col_s]
