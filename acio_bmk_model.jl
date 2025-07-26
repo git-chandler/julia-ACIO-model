@@ -1,16 +1,20 @@
 
 # set working directory
 cd("/home/chandler/julia-ACIO-model/")
-julia -project="."
 
 # import packages
 import XLSX
-using Statistics
+using DataFrames
+using LinearAlgebra
 
 # read detailed 2017 use table to a data frame
 useTable = XLSX.readdata("data/IOUse_Before_Redefinitions_PRO_2017_Detail.xlsx", 
                          "2017",
                          "A6:PK414")
+
+# change missing to 0. not ideal b.c BEA keeps true
+# zeroes blank. will revisit this another time.
+useTable = coalesce.(useTable,0)
 
 # drop intermediate total, final demand total, and final total columns
 # drop intermediate total, value added total, and final total rows
@@ -23,7 +27,7 @@ useTable = useTable[1:end, 1:end .≠2]
 
 # imports and final demand table
 fdTable = useTable[1:403, 1:end .∉[2:403]]
-imports = fdTable[:,9]
+imports = vcat(fdTable[1,9], -1*fdTable[2:end,9])
 fdTable = fdTable[:, 1:end .∉9]
 
 # value added table
@@ -37,6 +41,8 @@ makeTable = XLSX.readdata("data/IOMake_Before_Redefinitions_2017_Detail.xlsx",
                           "2017",
                           "A6:OO414")
 
+makeTable = coalesce.(makeTable,0)
+
 # reading too many rows. drop missing rows and row and column totals.
 makeTable = makeTable[1:403, 1:404]
 
@@ -47,15 +53,15 @@ indDesc = makeTable[1:end, 1:2]
 makeTable = makeTable[1:end, 1:end .∉2]
 
 #=
-form the submatrices and assemble the data
+form the submatrices and assemble the data. 
 =#
 
 # A-by-A and C-by-C portions have all 0 entries
-abya = zeros(size(makeTable[2:end,:])[1], size(makeTable[:,2:end])[2])
-abya = hcat(makeTable[2:end,1], abya)
+abya = zeros(402, 402)
+abya = hcat(indDesc[2:end,1], abya)
 abya = vcat(reshape(useTable[1,:], (1, 403)), abya)
-cbyc = zeros(size(useTable[2:end,:])[1], size(useTable[:,2:end])[2])
-cbyc = hcat(useTable[2:end,1], cbyc)
+cbyc = zeros(402, 402)
+cbyc = hcat(comDesc[2:end,1], cbyc)
 cbyc = vcat(reshape(makeTable[1,:], (1,403)), cbyc)
 
 # transactions matrix
@@ -79,6 +85,15 @@ acio = vcat(T_, L_)
 acio = hcat(acio, X_)
 
 # balance tests
-row_s = sum.(skipmissing.(eachrow(acio[2:806,2:end])))
-col_s = sum.(skipmissing.(eachcol(acio[2:end,2:806])))
-bal = [row_s, col_s]
+row_s = sum(acio[2:805,2:end], dims = 2)
+col_s = sum(acio[2:end,2:805], dims = 1)
+bal = row_s-col_s'
+
+# these are fine. some are on the order of 10^1. maybe a GRAS
+# implementation in the future would resolve the differences.
+
+# build the model
+Y_ = sum(acio[2:805,2:end], dims = 2)
+Y_inv = inv(diagm(vec(Y_.+eps(Float64))))
+A_ = T_[2:end,2:end]*Y_inv
+M_ = inv(Matrix{Int64}(I,804,804)-(A_))
