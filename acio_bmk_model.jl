@@ -1,7 +1,4 @@
 
-# set working directory
-cd("/home/chandler/julia-ACIO-model/")
-
 # import packages
 import XLSX
 using DataFrames
@@ -66,7 +63,8 @@ comavail = sum(makeTable[2:end,2:end], dims = 1) +
             reshape(imports[2:end,:], (1,ncom))
 
 # use equals availability
-com_bal = comuse - comavail' # small differences
+com_bal = comuse - comavail'
+com_bal[com_bal .> 0] # small differences
 
 # total industry output
 output = sum(makeTable[2:end,2:end], dims = 2)
@@ -76,21 +74,18 @@ outlays = sum(useTable[2:end,2:end], dims = 1) +
             sum(vaTable[2:end,2:end], dims = 1)
 
 # output equals outlays
-ind_bal = output - outlays' # small differences
+ind_bal = output - outlays' 
+ind_bal[ind_bal .> 0] # small differences
 
 # GDI + imports
 gdiplusimp = sum(vaTable[2:end,2:end], dims = 1) +
                 reshape(imports[2:end,:], (1,ncom))
 
-gdiplusimp = sum(gdiplusimp)
-
 # GDP + imports
 gdpplusimp = sum(fdTable[2:end,2:end], dims = 2)
 
-gdpplusimp = sum(gdpplusimp)
-
 # GDI + imports = GDP net of imports
-gdp_bal = gdiplusimp - gdpplusimp # small difference
+gdp_bal = sum(gdiplusimp) - sum(gdpplusimp) # small difference
 
 # form the submatrices and assemble the data. 
 
@@ -107,27 +102,24 @@ T_left = vcat(abya, useTable[2:end,:])
 T_right = vcat(makeTable[:,2:end], cbyc[2:end,2:end])
 T_ = hcat(T_left, T_right)
 
-# leakage matrix
-L_va = hcat(vaTable[2:end, 2:end], zeros(3, nind))
-L04 = hcat(zeros(1,402), reshape(imports[2:end,:], (1,ncom)))
-L_ = vcat(L_va, L04)
-L_ = hcat(["L01", "L02", "L03", "L04"], L_)
+# leakage vector
+l_va = sum(vaTable[2:end, 2:end], dims = 1)
+l_ = hcat("L00", l_va, reshape(imports[2:end,:], (1,nind)))
 
 # injection vector
-abyx = zeros(nind,19)
-lbyx = zeros(4,19)
-X_ = vcat(abyx, fdTable[2:end,2:end], lbyx)
-x_ = sum(X_, dims = 2)
+x_ = sum(fdTable[2:end,2:end], dims = 2)
+x_ = vcat(zeros(nind,1), x_, 0)
 x_ = vcat("X00", x_)
 
 # assemble the whole matrix
-acio = vcat(T_, L_)
+acio = vcat(T_, l_)
 acio = hcat(acio, x_)
 
-# balance tests
+# account balance tests
 row_s = sum(acio[2:805,2:end], dims = 2)
 col_s = sum(acio[2:end,2:805], dims = 1)
-bal = row_s-col_s' # small differences
+acct_bal = row_s-col_s' 
+acct_bal[acct_bal .> 10] # small differences
 
 # build the model
 # note that i have to specify Matrix{Float64} for the data 
@@ -146,17 +138,20 @@ A_ = Matrix{Float64}(T_[2:end,2:end])*Y_
 # total requirements multiplier matrix
 M_ = inv(Matrix{Int64}(I,804,804)-(A_))
 
-# value added multiplier matrix
-V_ = Y_ * Matrix{Float64}(L_[:,2:end])'
+# value added and imports multiplier vector
+v_ = Y_ * Matrix{Float64}(l_[:,2:end])'
 
 # test the model
 
 # total requirements times final demand sums reproduces gross output
-balM = M_*x_[2:805,:] - y_
+balM_ = M_*x_[2:805,:] - y_
+balM_[balM_ .> 1] # none
 
 # gross output times value added reproduces GDI + imports
-balV = (y_'*V_)' - sum(L_[:,2:end], dims = 2)
+balv_ = y_'*v_ - ones(1,(ncom+nind))*l_[:,2:end]'
+balv_ # this isn't balancing
 
 # walras's law
-balW = sum(V_'*M_*x_[2:805,:]) - sum(x_[2:805,:])
+balW = sum(v_'*M_*x_[2:805,:]) - sum(x_[2:805,:])
+balW # small difference
 
