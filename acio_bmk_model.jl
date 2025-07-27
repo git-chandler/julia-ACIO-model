@@ -7,13 +7,32 @@ import XLSX
 using DataFrames
 using LinearAlgebra
 
+# read detailed 2017 make table
+makeTable = XLSX.readdata("data/IOMake_Before_Redefinitions_2017_Detail.xlsx", 
+                          "2017",
+                          "A6:OO414")
+
+# change missing to 0. not ideal b.c BEA keeps true
+# zeroes blank. will revisit this another time.
+makeTable = coalesce.(makeTable,0)
+
+# reading too many rows. drop missing rows and row and column totals.
+makeTable = makeTable[1:403, 1:404]
+
+# industry descriptions
+indDesc = makeTable[1:end, 1:2]
+
+# drop description column
+makeTable = makeTable[1:end, 1:end .∉2]
+
+nind = size(makeTable)[1]-1 # number of industries
+ncom = size(makeTable)[2]-1 # number of commodities
+
 # read detailed 2017 use table to a data frame
 useTable = XLSX.readdata("data/IOUse_Before_Redefinitions_PRO_2017_Detail.xlsx", 
                          "2017",
                          "A6:PK414")
 
-# change missing to 0. not ideal b.c BEA keeps true
-# zeroes blank. will revisit this another time.
 useTable = coalesce.(useTable,0)
 
 # drop intermediate total, final demand total, and final total columns
@@ -36,31 +55,50 @@ vaTable = useTable[1:end .∉[2:403], 1:403]
 # use table
 useTable = useTable[1:403, 1:403]
 
-# read detailed 2017 use table to a data frame
-makeTable = XLSX.readdata("data/IOMake_Before_Redefinitions_2017_Detail.xlsx", 
-                          "2017",
-                          "A6:OO414")
+# some data checks
 
-makeTable = coalesce.(makeTable,0)
+# total commodity use by all markets
+comuse = sum(useTable[2:end,2:end], dims = 2) +
+            sum(fdTable[2:end,2:end], dims = 2)
 
-# reading too many rows. drop missing rows and row and column totals.
-makeTable = makeTable[1:403, 1:404]
+# total commodity availability
+comavail = sum(makeTable[2:end,2:end], dims = 1) +
+            reshape(imports[2:end,:], (1,ncom))
 
-# industry descriptions
-indDesc = makeTable[1:end, 1:2]
+# use equals availability
+com_bal = comuse - comavail' # small differences
 
-# drop description column
-makeTable = makeTable[1:end, 1:end .∉2]
+# total industry output
+output = sum(makeTable[2:end,2:end], dims = 2)
 
-#=
-form the submatrices and assemble the data. 
-=#
+# total industry outlays
+outlays = sum(useTable[2:end,2:end], dims = 1) +
+            sum(vaTable[2:end,2:end], dims = 1)
+
+# output equals outlays
+ind_bal = output - outlays' # small differences
+
+# GDI + imports
+gdiplusimp = sum(vaTable[2:end,2:end], dims = 1) +
+                reshape(imports[2:end,:], (1,ncom))
+
+gdiplusimp = sum(gdiplusimp)
+
+# GDP + imports
+gdpplusimp = sum(fdTable[2:end,2:end], dims = 2)
+
+gdpplusimp = sum(gdpplusimp)
+
+# GDI + imports = GDP net of imports
+gdp_bal = gdiplusimp - gdpplusimp # small difference
+
+# form the submatrices and assemble the data. 
 
 # A-by-A and C-by-C portions have all 0 entries
-abya = zeros(402, 402)
+abya = zeros(nind, nind)
 abya = hcat(indDesc[2:end,1], abya)
 abya = vcat(reshape(useTable[1,:], (1, 403)), abya)
-cbyc = zeros(402, 402)
+cbyc = zeros(ncom, ncom)
 cbyc = hcat(comDesc[2:end,1], cbyc)
 cbyc = vcat(reshape(makeTable[1,:], (1,403)), cbyc)
 
@@ -70,27 +108,26 @@ T_right = vcat(makeTable[:,2:end], cbyc[2:end,2:end])
 T_ = hcat(T_left, T_right)
 
 # leakage matrix
-L_va = hcat(vaTable[2:end, 2:end], zeros(3, 402))
-L04 = hcat(zeros(1,402), reshape(imports[2:end,:], (1,402)))
+L_va = hcat(vaTable[2:end, 2:end], zeros(3, nind))
+L04 = hcat(zeros(1,402), reshape(imports[2:end,:], (1,ncom)))
 L_ = vcat(L_va, L04)
 L_ = hcat(["L01", "L02", "L03", "L04"], L_)
 
-# injection matrix
-abyx = zeros(402,19)
+# injection vector
+abyx = zeros(nind,19)
 lbyx = zeros(4,19)
-X_ = vcat(reshape(fdTable[1,2:end], (1,19)), abyx, fdTable[2:end,2:end], lbyx)
+X_ = vcat(abyx, fdTable[2:end,2:end], lbyx)
+x_ = sum(X_, dims = 2)
+x_ = vcat("X00", x_)
 
 # assemble the whole matrix
 acio = vcat(T_, L_)
-acio = hcat(acio, X_)
+acio = hcat(acio, x_)
 
 # balance tests
 row_s = sum(acio[2:805,2:end], dims = 2)
 col_s = sum(acio[2:end,2:805], dims = 1)
-bal = row_s-col_s'
-
-# these are fine. some are on the order of 10^1. maybe a GRAS
-# implementation in the future would resolve the differences.
+bal = row_s-col_s' # small differences
 
 # build the model
 # note that i have to specify Matrix{Float64} for the data 
@@ -115,12 +152,11 @@ V_ = Y_ * Matrix{Float64}(L_[:,2:end])'
 # test the model
 
 # total requirements times final demand sums reproduces gross output
-x_ = sum(X_[2:805,2:end], dims = 2) # final demand vector
-balM = M_*x_ - y_
+balM = M_*x_[2:805,:] - y_
 
 # gross output times value added reproduces GDI + imports
 balV = (y_'*V_)' - sum(L_[:,2:end], dims = 2)
 
 # walras's law
-balW = sum(V_'*M_*x_) - sum(x_)
+balW = sum(V_'*M_*x_[2:805,:]) - sum(x_[2:805,:])
 
