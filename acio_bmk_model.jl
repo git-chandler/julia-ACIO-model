@@ -93,7 +93,34 @@ bal = row_s-col_s'
 # implementation in the future would resolve the differences.
 
 # build the model
-Y_ = sum(acio[2:805,2:end], dims = 2)
-Y_inv = inv(diagm(vec(Y_.+eps(Float64))))
-A_ = T_[2:end,2:end]*Y_inv
+# note that i have to specify Matrix{Float64} for the data 
+# portion of T_. because the row and column names are strings
+# in T_, it's considered Matrix{Any}.
+
+# gross output vector (lower case y_)
+y_ = sum(acio[2:805,2:end], dims = 2) 
+
+# inverse diagonal matrix of gross output (capital Y_)
+Y_ = inv(diagm(vec(y_.+eps(Float64))))
+
+# direct requirements multiplier matrix
+A_ = Matrix{Float64}(T_[2:end,2:end])*Y_
+
+# total requirements multiplier matrix
 M_ = inv(Matrix{Int64}(I,804,804)-(A_))
+
+# value added multiplier matrix
+V_ = Y_ * Matrix{Float64}(L_[:,2:end])'
+
+# test the model
+
+# total requirements times final demand sums reproduces gross output
+x_ = sum(X_[2:805,2:end], dims = 2) # final demand vector
+balM = M_*x_ - y_
+
+# gross output times value added reproduces GDI + imports
+balV = (y_'*V_)' - sum(L_[:,2:end], dims = 2)
+
+# walras's law
+balW = sum(V_'*M_*x_) - sum(x_)
+
