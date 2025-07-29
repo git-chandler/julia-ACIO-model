@@ -1,4 +1,6 @@
 
+cd("/home/chandler/julia-ACIO-model/")
+
 # import packages
 import XLSX
 using DataFrames
@@ -46,6 +48,8 @@ fdTable = useTable[1:403, 1:end .∉[2:403]]
 imports = vcat(fdTable[1,9], -1*fdTable[2:end,9])
 fdTable = fdTable[:, 1:end .∉9]
 
+imports0 = fdTable[:,9]
+
 # value added table
 vaTable = useTable[1:end .∉[2:403], 1:403]
 
@@ -64,7 +68,7 @@ comavail = sum(makeTable[2:end,2:end], dims = 1) +
 
 # use equals availability
 com_bal = comuse - comavail'
-com_bal[com_bal .> 0] # small differences
+com_bal[abs.(com_bal) .> 10] # small differences
 
 # total industry output
 output = sum(makeTable[2:end,2:end], dims = 2)
@@ -75,7 +79,7 @@ outlays = sum(useTable[2:end,2:end], dims = 1) +
 
 # output equals outlays
 ind_bal = output - outlays' 
-ind_bal[ind_bal .> 0] # small differences
+ind_bal[abs.(ind_bal) .> 10] # small differences
 
 # GDI + imports
 gdiplusimp = sum(vaTable[2:end,2:end], dims = 1) +
@@ -119,7 +123,7 @@ acio = hcat(acio, x_)
 row_s = sum(acio[2:805,2:end], dims = 2)
 col_s = sum(acio[2:end,2:805], dims = 1)
 acct_bal = row_s-col_s' 
-acct_bal[acct_bal .> 10] # small differences
+acct_bal[abs.(acct_bal) .> 10] # small differences
 
 # build the model
 # note that i have to specify Matrix{Float64} for the data 
@@ -145,11 +149,21 @@ v_ = Y_ * Matrix{Float64}(l_[:,2:end])'
 
 # total requirements times final demand sums reproduces gross output
 balM_ = M_*x_[2:805,:] - y_
-balM_[balM_ .> 1] # none
+balM_[abs.(balM_) .> 10] # doesn't balance
+
+imbal = balM_[abs.(balM_) .> 10]
+imbal_index = findall(x -> x == imbal[1], balM_)
+indDesc[imbal_index[1][1]+1, :]
+
+## 4200ID customs duties
+
+useTable[1, imbal_index[1][1]+1]
+y_[imbal_index[1][1]]
+(M_*x_[2:805,:])[imbal_index[1][1]]
 
 # gross output times value added reproduces GDI + imports
-balv_ = y_'*v_ - ones(1,(ncom+nind))*l_[:,2:end]'
-balv_ # this isn't balancing
+balv_ = y_'*v_ - ones( 1,(ncom+nind))*l_[:,2:end]'
+balv_ 
 
 # walras's law
 balW = sum(v_'*M_*x_[2:805,:]) - sum(x_[2:805,:])
