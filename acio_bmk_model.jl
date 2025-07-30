@@ -18,7 +18,7 @@ makeTable = coalesce.(makeTable,0)
 makeTable = makeTable[1:403, 1:404]
 
 # industry descriptions
-indDesc = makeTable[1:end, 1:2]
+indDesc = DataFrame(Code=makeTable[2:end,1],IndDesc=makeTable[2:end,2])
 
 # drop description column
 makeTable = makeTable[1:end, 1:end .∉2]
@@ -38,16 +38,16 @@ useTable = coalesce.(useTable,0)
 useTable = useTable[1:end .∉[[404, 408, 409]],1:end .∉[[405, 426, 427]]]
 
 # commodity and value added descriptions
-comDesc = useTable[1:403, 1:2]
+comDesc = DataFrame(Code=useTable[2:end,1],ComDesc=useTable[2:end,2])
 vaDesc = useTable[404:406,1:2]
 useTable = useTable[1:end, 1:end .≠2]
+
+indComDesc = outerjoin(indDescDF,comDescDF,on=:Code)
 
 # imports and final demand table
 fdTable = useTable[1:403, 1:end .∉[2:403]]
 imports = vcat(fdTable[1,9], -1*fdTable[2:end,9])
 fdTable = fdTable[:, 1:end .∉9]
-
-imports0 = fdTable[:,9]
 
 # value added table
 vaTable = useTable[1:end .∉[2:403], 1:403]
