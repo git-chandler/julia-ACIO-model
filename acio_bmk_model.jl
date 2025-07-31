@@ -1,5 +1,5 @@
 
-
+cd("/home/chandler/julia-ACIO-model/")
 
 # import packages
 import XLSX
@@ -75,8 +75,9 @@ comavail = sum(Matrix{Int64}(makeDF[:,2:end]), dims = 1) +
             -1*reshape(Vector{Int64}(impDF), (1,402))
 
 # use equals availability
-com_bal = comuse - comavail'
-com_bal[abs.(com_bal) .> 10] # small differences
+combal = comuse - comavail'
+comBalDF = DataFrame(comDesc=comDesc[:,1], comuse=comuse[:,1], comavail=comavail'[:,1], combal=combal[:,1])
+comBalDF[abs.(comBalDF.combal) .> 10,:] # small differences
 
 # total industry output
 output = sum(Matrix{Int64}(makeDF[:,2:end]), dims = 2)
@@ -86,8 +87,9 @@ outlays = sum(Matrix{Int64}(useDF[:,2:end]), dims = 1) +
             sum(Matrix{Int64}(vaDF[:,2:end]), dims = 1)
 
 # output equals outlays
-ind_bal = output - outlays' 
-ind_bal[abs.(ind_bal) .> 10] # small differences
+indbal = output - outlays' 
+indBalDF = DataFrame(indDesc=comDesc[:,1], output=output[:,1], outlays=outlays'[:,1], indbal=indbal[:,1])
+indBalDF[abs.(indBalDF.indbal) .> 10,:] # small differences
 
 # GDI + imports
 gdiplusimp = sum(Matrix{Int64}(vaDF[:,2:end]), dims = 1) +
@@ -97,41 +99,46 @@ gdiplusimp = sum(Matrix{Int64}(vaDF[:,2:end]), dims = 1) +
 gdpplusimp = sum(Matrix{Int64}(fdDF[:,2:end]), dims = 2)
 
 # GDI + imports = GDP net of imports
-gdp_bal = sum(gdiplusimp) - sum(gdpplusimp) # small difference
+gdpbal = sum(gdiplusimp) - sum(gdpplusimp) # small difference
 
 # form the submatrices and assemble the data. 
 
 # A-by-A and C-by-C portions have all 0 entries
-abya = zeros(402,402)
-abya = hcat(indDesc[:,1], abya)
-abya = DataFrame(abya, names(useDF))
-cbyc = zeros(402,402)
-cbyc = hcat(comDesc[:,1], cbyc)
-cbyc = DataFrame(cbyc,names(makeDF))
+rename!(makeDF, names(makeDF[:,2:end]) .=> "C".*names(makeDF)[2:end])
+rename!(useDF, names(useDF[:,2:end]) .=> "I".*names(useDF)[2:end])
+makeDF.Code = string.("I",makeDF.Code)
+useDF.Code = string.("C",useDF.Code)
+abya = DataFrame(zeros(402,402), names(useDF[:,2:end]))
+insertcols!(abya,1,:Code=>makeDF.Code)
+cbyc = DataFrame(zeros(402,402), names(makeDF[:,2:end]))
+insertcols!(cbyc,1,:Code=>useDF.Code)
 
 # transactions matrix
 T_left = vcat(abya, useDF)
-T_right = vcat(makeDF[:,2:end], cbyc[:,2:end])
-T_ = hcat(T_left, T_right) # duplicate variable names
+T_right = vcat(makeDF, cbyc)
+T_ = hcat(T_left, T_right[:,2:end]) # duplicate variable names
 
 # leakage vector
 l_va = sum(Matrix{Int64}(vaDF[:, 2:end]), dims = 1)
 l_ = hcat("L00", l_va, -1*reshape(Vector{Int64}(impDF), (1,402)))
+l_ = DataFrame(l_,names(T_))
 
 # injection vector
-x_ = sum(fdTable[2:end,2:end], dims = 2)
-x_ = vcat(zeros(nind,1), x_, 0)
-x_ = vcat("X00", x_)
+x_ = sum(Matrix{Int64}(fdDF[:,2:end]), dims = 2)
+x_ = vcat(zeros(402,1), x_, 0)
+x_ = DataFrame(x_,:auto)
+rename!(x_,[:"X00"])
 
 # assemble the whole matrix
 acio = vcat(T_, l_)
 acio = hcat(acio, x_)
 
 # account balance tests
-row_s = sum(acio[2:805,2:end], dims = 2)
-col_s = sum(acio[2:end,2:805], dims = 1)
-acct_bal = row_s-col_s' 
-acct_bal[abs.(acct_bal) .> 10] # small differences
+row_s = sum(Matrix{Int64}(acio[1:804,2:end]), dims = 2)
+col_s = sum(Matrix{Int64}(acio[:,2:805]), dims = 1)
+acctbal = row_s-col_s' 
+acctBalDF = DataFrame(Desc=T_[:,1], row_s=row_s[:,1], col_s=col_s'[:,1], acctbal=acctbal[:,1])
+acctBalDF[abs.(acctBalDF.acctbal) .> 10,:] # small differences
 
 # build the model
 # note that i have to specify Matrix{Float64} for the data 
@@ -139,13 +146,13 @@ acct_bal[abs.(acct_bal) .> 10] # small differences
 # in T_, it's considered Matrix{Any}.
 
 # gross output vector (lower case y_)
-y_ = sum(acio[2:805,2:end], dims = 2) 
+y_ = sum(Matrix{Int64}(acio[1:804,2:end]), dims = 2) 
 
 # inverse diagonal matrix of gross output (capital Y_)
 Y_ = inv(diagm(vec(y_.+eps(Float64))))
 
 # direct requirements multiplier matrix
-A_ = Matrix{Float64}(T_[2:end,2:end])*Y_
+A_ = Matrix{Float64}(T_[1:end,2:end])*Y_
 
 # total requirements multiplier matrix
 M_ = inv(Matrix{Int64}(I,804,804)-(A_))
@@ -156,7 +163,7 @@ v_ = Y_ * Matrix{Float64}(l_[:,2:end])'
 # test the model
 
 # total requirements times final demand sums reproduces gross output
-balM_ = M_*x_[2:805,:] - y_
+balM_ = M_*x_[1:804,1] - y_
 balM_[abs.(balM_) .> 10] # doesn't balance
 
 imbal = balM_[abs.(balM_) .> 10]
