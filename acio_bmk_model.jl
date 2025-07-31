@@ -1,5 +1,5 @@
 
-cd("/home/chandler/julia-ACIO-model/")
+
 
 # import packages
 import XLSX
