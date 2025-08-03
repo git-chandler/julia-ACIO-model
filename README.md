@@ -3,6 +3,8 @@ This repo is for learning to use the Julia programming language and creating an 
 
 I am currently using Debian GNU/Linux 12 on Chrome OS Version 137.0.7151.137. The Julia version is 1.11.6.
 
+The "bmk" code file builds a model using benchmark data. The "ann" file builds a model using annual data.
+
 # Data
 ## BEA Benchmark and Annual Make and Use Tables
 -   [Download data here](https://apps.bea.gov/iTable/?reqid=151&step=1)
